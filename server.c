@@ -11,146 +11,60 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <ctype.h>
+#include "utils.c"
 
-#include <ctype.h> 
-
-#define MYPORT "10000" // the port users will be connecting to
-#define BACKLOG 1
-
-// ntop - network to presentation ## inet_ntop
-// pton - presentation to network ## inet_pton
-// AF_INET - address family
-void sigchld_handler(int s)
-{
-	// waitpid() might overwrite errno, so we save and restore it:
-	int saved_errno = errno;
-
-	while (waitpid(-1, NULL, WNOHANG) > 0)
-		;
-
-	errno = saved_errno;
-}
-
-void *get_in_addr(struct sockaddr *sa)
-{
-	if (sa->sa_family == AF_INET)
-	{
-		return &(((struct sockaddr_in *)sa)->sin_addr);
-	}
-
-	return &(((struct sockaddr_in6 *)sa)->sin6_addr);
-}
-
-void toUpperLine(char *str) {
-	for (int i = 0; i < strlen(str); i++) {
-		str[i] = toupper(str[i]);
-	}
-}
+#define BUFFSIZE 1024
 
 int main(int argc, char *argv[])
 {
+	char *host = argv[1];
+	char *port = argv[2];
 
-	int status;
-	struct addrinfo hints, *res, *p;
-	struct sigaction sa;
-	struct sockaddr_storage their_addr;
-	socklen_t addr_size;
-	char s[INET6_ADDRSTRLEN];
-
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
-
-	if ((status = getaddrinfo(NULL, MYPORT, &hints, &res)) != 0)
-	{
-		fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-		exit(1);
+	if (host == NULL || port == NULL) {
+		printf("Provide host and port as arguments\n");
+		return 1;
 	}
 
 	int sock;
-
-	for (p = res; p != NULL; p = p->ai_next)
-	{
-		sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-		if (sock < 1)
-		{
-			fprintf(stderr, "error in socket creation");
-			continue;
-		}
-
-		if (bind(sock, res->ai_addr, res->ai_addrlen) == -1)
-		{
-			fprintf(stderr, "error in binding\n");
-			continue;
-		};
-		break;
-	}
-	freeaddrinfo(res);
-
-	if (p == NULL)
-	{
-		fprintf(stderr, "server failed to bind");
-		exit(1);
-	}
-
-	if (listen(sock, BACKLOG) == -1)
-	{
-		fprintf(stderr, "error in listening port");
-		exit(1);
+	if ((sock = createSocket(host, port)) == -1) {
+		printf("Error in creating socket");
+        return 1;
 	};
 
-	sa.sa_handler = sigchld_handler; // reap all dead processes
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
-	if (sigaction(SIGCHLD, &sa, NULL) == -1)
-	{
-		perror("sigaction");
-		exit(1);
-	}
+	struct sockaddr_storage connected_addr;
+	socklen_t addr_size;
+	addr_size = sizeof connected_addr;
+	char s[INET6_ADDRSTRLEN];
 
-	printf("server: waiting for connections...\n");
+	int new_fd;
+	if ((new_fd = accept(sock, (struct sockaddr *)&connected_addr, &addr_size)) == -1) {
+		fprintf(stderr, "error in accepting connection\n");
+		return 2;
+	};
 
-	while (1)
-	{
-		addr_size = sizeof their_addr;
-		int new_fd;
-		if ((new_fd = accept(sock, (struct sockaddr *)&their_addr, &addr_size)) == -1)
-		{
-			fprintf(stderr, "error in accepting connection");
-			return 2;
-		};
+	inet_ntop(connected_addr.ss_family, get_in_addr((struct sockaddr *)&connected_addr), s, sizeof s);
+	printf("Server: connection %s\n", s);
 
-		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
-		printf("server: connection %s\n", s);
+	int bytes;
+	char buf[BUFFSIZE];
+	while (1) {
+		if ((bytes = recv(new_fd, buf, BUFFSIZE, 0)) == -1)
+			perror("recv");
 
-		if (!fork())
-		{				 // this is the child process
-			close(sock); // child doesn't need the listener
-			if (send(new_fd, "Hello, Client!", 14, 0) == -1)
-				perror("send");
-			//
-			int bytes;
-			char buf[20];
-			if ((bytes = recv(new_fd, buf, 19, 0)) == -1)
-			{
-				perror("recv");
-			}
-
-			buf[bytes] = '\0';
-
-			printf("server: client's messsage '%s'\n", buf);
-			toUpperLine(buf);
-			
-			if (send(new_fd, buf, 19, 0) == -1) {
-				perror("send");
-			}
-			
-			//
-			close(new_fd);
-			exit(0);
+		if (bytes == 0) {
+			printf("Server closed\n");
+			return 0;
 		}
-		close(new_fd);
+		buf[bytes] = '\0';
+
+		printf("T1 server client: %s", buf);
+		toUpperLine(buf);
+
+		if (send(new_fd, buf, bytes + 1, 0) == -1)
+			perror("send");
 	}
+	close(sock);
+	close(new_fd);
 	return 0;
 }
