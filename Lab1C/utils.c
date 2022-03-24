@@ -68,7 +68,6 @@ int createSocket(char *host, char *port) {
 			continue;
 		}
 
-		int yes = 1;
 		if (bind(sock, res->ai_addr, res->ai_addrlen) == -1) {
 			fprintf(stderr, "error in binding\n");
 			continue;
@@ -138,8 +137,30 @@ int connectToServer(char *host, char *port) {
         return -1;
     }
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
-    printf("Connecting to %s\n", s);
+    printf("Connecting to %s\n\n", s);
     freeaddrinfo(res);
 
     return sockfd;
+}
+
+int searchForStringInList(char list[][99], int size, char *str) {
+    for (int i = 0; i < size; i++) {
+        if (strcmp(list[i], str) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void addStringToList(char list[][99], int place, char *str, int size_of_str) {
+    for (int i = 0; i < size_of_str; i++) {
+        list[place][i] = str[i];
+    }
+    list[place][size_of_str] = '\0';
+}
+
+void convertStringToNormal(char *str1, char *str2, int size) {
+    for (int i = 0; i < size; i++) {
+        printf("Symbol %d: %d\n", i, str1[i]);
+    }
 }

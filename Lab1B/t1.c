@@ -15,6 +15,7 @@
 #include "utils.c"
 
 #define BUFFSIZE 1024
+#define RESULTS_FILE "results.txt"
 
 int main(int argc, char *argv[])
 {
@@ -28,6 +29,12 @@ int main(int argc, char *argv[])
 		printf("Provide host and port as arguments\n");
 		return 1;
 	}
+
+	FILE *results_file = fopen(RESULTS_FILE, "w");
+    if (results_file == NULL) {
+        printf("Couldnt open file");
+        return 1;
+    }
 
 	int sock;
 	if ((sock = createSocket(host, port)) == -1) {
@@ -62,7 +69,7 @@ int main(int argc, char *argv[])
 
 		if (bytes == 0) {
 			printf("Server closed\n");
-			return 0;
+			break;
 		}
 		buf[bytes] = '\0';
 		printf("Client: %s", buf);
@@ -74,8 +81,8 @@ int main(int argc, char *argv[])
             perror("recv");
         }
 		buf[bytes] = '\0';
-		printf("Server: %s\n", buf);
-
+		printf("Server: %s", buf);
+		fprintf(results_file, "%s", buf);
 		if (send(new_fd, buf, bytes + 1, 0) == -1)
 			perror("send");
 	}

@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include "utils.c"
 
-#define MAXDATASIZE 100
+#define MAXDATASIZE 1024
 #define FILE_NAME "data.txt"
 
 int main(int argc, char *argv[])
@@ -38,9 +38,13 @@ int main(int argc, char *argv[])
 
     int bytes;
     char msg[MAXDATASIZE];
-    while (1) {
-        printf("Your message to server: ");
-        fgets(msg, MAXDATASIZE, stdin);
+    while (fgets(msg, MAXDATASIZE, data_file)) {
+        //printf("Your message to server: ");
+        if(strlen(msg) == 0){
+            printf("EOF\n");
+            break;
+        }
+
         if (send(sockfd, msg, strlen(msg), 0) == -1)
             perror("sending message");
 
@@ -50,7 +54,7 @@ int main(int argc, char *argv[])
         }
 
         buf[bytes] = '\0';
-        printf("Server: %s\n", buf);
+        printf("Server: %s", buf);
     }
     close(sockfd);
 
