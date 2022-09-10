@@ -12,10 +12,14 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <ctype.h>
+#include <time.h>
 #include "utils.c"
 
 #define BUFFSIZE 99
 #define STRING_LIST 99
+#define LOG_FILE_NAME "logs.txt"
+// bot state -1
+#define BOT_NICKNAME "VERYSECRETBOT"
 
 int main(int argc, char *argv[])
 {
@@ -27,7 +31,7 @@ int main(int argc, char *argv[])
         printf("Provide host and port as arguments\n");
         return 1;
     }
-
+    
     int listening_sock;
     if ((listening_sock = createSocket(host, port)) == -1)
     {
@@ -56,7 +60,17 @@ int main(int argc, char *argv[])
 
     int bytes;
     char buf[BUFFSIZE];
+    
+    // time
+    time_t rawtime;
+    struct tm * timeinfo;
 
+    FILE *log_file = fopen(LOG_FILE_NAME, "a+");
+    if (log_file == NULL) {
+        printf("Couldnt open file");
+        return 1;
+    }
+    char lastMessage[BUFFSIZE];
     while (1)
     {
         readfds = master;
@@ -103,12 +117,16 @@ int main(int argc, char *argv[])
                     }
                     else {
                         // got message from client
-                        //buf[bytes] = '\0';
-                        //printf("dydys buf %zu, buf %s", strlen(buf), buf);
                         buf[bytes - 2] = '\0';
+                        // message to confirm name
                         if (states[i] == 2) {
                             if (searchForStringInList(names, STRING_LIST - 1, buf) == 0) {
                                 addStringToList(names, i, buf, bytes);
+                                if (strcmp(buf, BOT_NICKNAME) == 0) {
+                                    printf("bot %s joined\n", buf);
+                                    states[i] = -1;
+                                    continue;
+                                }
                                 strcat(buf, " joined the chat\n\0");
                                 for (int j = 0; j <= fds_count; j++) {
                                     if (FD_ISSET(j, &master)) {
@@ -129,6 +147,17 @@ int main(int argc, char *argv[])
                                 printf("there is already that name\n");
                             }
                         }
+                        // message from bot
+                        else if (states[i] == -1) {
+                            time(&rawtime);
+                            timeinfo = localtime(&rawtime);
+                            char* curr_time = asctime(timeinfo);
+                            curr_time[strlen(curr_time) - 1] = '\0';
+                            buf[0] = ' ';
+                            fprintf(log_file, "[%s] %s: %s\n", curr_time, buf, lastMessage);
+                            fflush(log_file);
+                        }
+                        // message from everyone else
                         else {
                             for (int j = 0; j <= fds_count; j++) {
                                 if (FD_ISSET(j, &master)) {
@@ -148,12 +177,15 @@ int main(int argc, char *argv[])
                                 }
                             }
                         }
+                        strcpy(lastMessage, buf);
                     }
                 }
             }
         }
     }
+    fclose(log_file);
     close(listening_sock);
+    fclose(log_file);
 
     return 0;
 }
